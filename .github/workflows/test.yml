@@ -9,13 +9,13 @@ on:
       - main
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.8']
+        python-version: ['3.8', '3.9', 'pypy-3.8']
     steps:
-      - name: Check out repository
+      - name: Check out code
         uses: actions/checkout@v2
 
       - name: Set up Python ${{ matrix.python-version }}
@@ -23,23 +23,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Poetry
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install poetry
+          pip install tox-gh-actions codecov
 
-      - name: Install dependencies
-        run: make setup
+      - name: Run tests
+        run: tox
 
-      - name: Build
-        run: poetry build
-
-      - name: Lint with Flake8
-        run: make lint
-
-      - name: Build documentation
-        run: make docs
-
-      - name: Test with coverage
-        run: make travis-test
-        continue-on-error: true
+      - name: Upload coverage to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: |
+          VERSION="python_${{ matrix.python-version }}" &&
+          VERSION="${VERSION//[^[:alnum:]]/}" &&
+          codecov --token=${{ secrets.CODECOV_TOKEN }} --required --flags $VERSION
