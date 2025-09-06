@@ -1,55 +1,40 @@
-"""
-Python toolkit to work with BUFR messages.
-"""
-import os
-
-from setuptools import setup
-
-
-def get_version():
-    with open(os.path.join(os.path.dirname(__file__), 'pybufrkit', '__init__.py')) as ins:
-        for line in ins.readlines():
-            if line.startswith('__version__'):
-                return line.split('=')[1].strip()[1:-1]
-
-
-def get_requirements():
-    requirements = ['bitstring>=3.1.3', 'six']
-    return requirements
-
+from setuptools import setup, find_packages
 
 setup(
-    name='pybufrkit',
-    version=get_version(),
-    platforms=['any'],
-    packages=['pybufrkit'],
-    package_dir={'pybufrkit': 'pybufrkit'},
+    name="django-statici18n",
+    version="2.1.1",
+    author="Sebastien Fievet",
+    author_email="zyegfryed@gmail.com",
+    url="http://django-statici18n.readthedocs.org/",
+    description="A Django app that provides helper for generating "
+    "Javascript catalog to static files.",
+    long_description=open("README.rst").read(),
+    package_dir={"": "src"},
+    packages=find_packages("src"),
     include_package_data=True,
-    setup_requires=["pytest-runner"],
-    install_requires=get_requirements(),
-    tests_require=['pytest'],
-    entry_points={
-        'console_scripts': ['pybufrkit = pybufrkit:main'],
-    },
-
-    author='Yang Wang',
-    author_email='ywangd@gmail.com',
-    description='Python toolkit to work with BUFR files',
-    long_description=__doc__,
-    license='MIT',
+    zip_safe=False,
+    install_requires=[
+        "Django>=2.2",
+        "django-appconf>=1.0",
+    ],
+    license="BSD",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
-        "Environment :: Console",
+        "Environment :: Web Environment",
+        "Framework :: Django",
         "Intended Audience :: Developers",
-        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
-        "License :: OSI Approved :: MIT License",
-        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.4",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
-        "Topic :: Utilities",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
-    keywords=['BUFR', 'WMO'],
-    url='https://github.com/ywangd/pybufrkit',
+    project_urls={
+        "Source": "https://github.com/zyegfryed/django-statici18n",
+    },
 )
