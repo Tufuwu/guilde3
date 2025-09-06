@@ -1,322 +1,175 @@
-ClickHouse SQLAlchemy
-=====================
+Python Toolkit for WMO BUFR Messages
+====================================
 
-ClickHouse dialect for SQLAlchemy to `ClickHouse database <https://clickhouse.yandex/>`_.
+.. image:: https://travis-ci.org/ywangd/pybufrkit.svg?branch=master
+    :target: https://travis-ci.org/ywangd/pybufrkit
 
+`PyBufrKit <https://github.com/ywangd/pybufrkit>`_ is a **pure** Python package
+to work with WMO BUFR (FM-94) messages. It can be used as both a
+command line tool or library to decode and encode BUFR messages. Here is a brief
+list of some of the features:
 
-.. image:: https://img.shields.io/pypi/v/clickhouse-sqlalchemy.svg
-    :target: https://pypi.org/project/clickhouse-sqlalchemy
+* Pure Python
+* Handles both compressed and un-compressed messages
+* Handles all practical operator descriptors, including data quality info,
+  stats, bitmaps, etc.
+* Option to construct hierarchial structure of a message, e.g. associate
+  first order stats data to their owners.
+* Convenient subsetting support for BUFR messages
+* Comprehensive query support for BUFR messages
+* Script support enables flexible extensions, e.g. filtering through large number of files.
+* Tested with the same set of BUFR files used by
+  `ecCodes <https://software.ecmwf.int/wiki/display/ECC/ecCodes+Home>`_
+  and `BUFRDC <https://software.ecmwf.int/wiki/display/BUFR/BUFRDC+Home>`_.
 
-.. image:: https://coveralls.io/repos/github/xzkostyan/clickhouse-sqlalchemy/badge.svg?branch=master
-    :target: https://coveralls.io/github/xzkostyan/clickhouse-sqlalchemy?branch=master
+More documentation at http://pybufrkit.readthedocs.io/
 
-.. image:: https://img.shields.io/pypi/l/clickhouse-sqlalchemy.svg
-    :target: https://pypi.org/project/clickhouse-sqlalchemy
-
-.. image:: https://img.shields.io/pypi/pyversions/clickhouse-sqlalchemy.svg
-    :target: https://pypi.org/project/clickhouse-sqlalchemy
-
-.. image:: https://img.shields.io/pypi/dm/clickhouse-sqlalchemy.svg
-    :target: https://pypi.org/project/clickhouse-sqlalchemy
-
-.. image:: https://github.com/xzkostyan/clickhouse-sqlalchemy/actions/workflows/actions.yml/badge.svg
-   :target: https://github.com/xzkostyan/clickhouse-sqlalchemy/actions/workflows/actions.yml
+An `online BUFR decoder <http://aws-bufr-webapp.s3-website-ap-southeast-2.amazonaws.com/>`_ powered by PyBufrKit, 
+`Serverless <https://serverless.com/>`_ and `AWS Lambda <https://aws.amazon.com/lambda/>`_.
 
 Installation
-============
+------------
+PyBufrKit is compatible with Python 2.7, 3.5+, and `PyPy <https://pypy.org/>`_.
+To install from PyPi::
 
-The package can be installed using ``pip``:
+    pip install pybufrkit
 
-    .. code-block:: bash
+Or from source::
 
-       pip install clickhouse-sqlalchemy
+    python setup.py install
 
-Interfaces support
+Command Line Usage
 ------------------
 
-- **native** [recommended] (TCP) via `clickhouse-driver <https://github.com/mymarilyn/clickhouse-driver>`_
-- **http** via requests
+The command line usage of the toolkit takes the following form::
 
+    pybufrkit [OPTIONS] command ...
 
-Connection Parameters
-=====================
+where the ``command`` is one of following actions that can be performed by the tool:
 
-ClickHouse SQLAlchemy uses the following syntax for the connection string:
+* ``decode`` - Decode a BUFR file to outputs of various format, e.g. JSON
+* ``encode`` - Encode a BUFR file from a JSON input
+* ``info`` - Decode only the metadata sections (i.e. section 0, 1, 2, 3) of given BUFR files
+* ``split`` - Split given BUFR files into one message per file
+* ``subset`` - Subset the given BUFR file and save as new file
+* ``query`` - Query metadata or data of given BUFR files
+* ``script`` - Embed BUFR query expressions into normal Python script
+* ``lookup`` - Look up information about the given list of comma separated BUFR descriptors
+* ``compile`` - Compile the given comma separated BUFR descriptors
 
-    .. code-block:: python
+Here are a few examples using the tool from command line. For more details, please refer
+to the help option, e.g. ``pybufrkit decode -h``. Also checkout the
+`documentation <http://pybufrkit.readthedocs.io/>`_.
 
-     'clickhouse+<driver>://<user>:<password>@<host>:<port>/<database>[?key=value..]'
+.. code-block:: Bash
 
-Where:
+    # Decode a BUFR file and output in the default flat text format
+    pybufrkit decode BUFR_FILE
 
-- *driver* is driver to use. Possible choices: ``http``, ``native``. ``http`` is default.
-- *database* is database connect to. Default is ``default``.
+    # Decode a file that is a concatenation of multiple BUFR messages,
+    # skipping any erroneous messages and continue on next one
+    pybufrkit decode -m --continue-on-error FILE
 
+    # Filter through a multi-message file and only decode messages
+    # that have data_category equals to 2. See below for details
+    # about usable filter expressions.
+    pybufrkit decode -m --filter '${%data_category} == 2' FILE
 
-Drivers options
-===============
+    # Decode a BUFR file and display it in a hierarchical structure
+    # corresponding to the BUFR Descriptors. In addition, the attribute
+    # descriptors are associated to their (bitmap) corresponding descriptors.
+    pybufrkit decode -a BUFR_FILE
 
-There are several options can be specified in query string.
+    # Decode a BUFR file and output in the flat JSON format
+    pybufrkit decode -j BUFR_FILE
 
-HTTP
-----
+    # Encode from a flat JSON file to BUFR
+    pybufrkit encode -j JSON_FILE BUFR_FILE
 
-- *port* is port ClickHouse server is bound to. Default is ``8123``.
-- *timeout* in seconds. There is no timeout by default.
-- *protocol* to use. Possible choices: ``http``, ``https``. ``http`` is default.
+    # Decode a BUFR file, pipe it to the encoder to encode it back to BUFR
+    pybufrkit decode BUFR_FILE | pybufrkit encode -
 
-Connection string to database `test` in default ClickHouse installation:
+    # Decode only the metadata sections of a BUFR file
+    pybufrkit info BUFR_FILE
 
-    .. code-block:: python
+    # Split a BUFR file into one message per file
+    pybufrkit split BUFR_FILE
 
-         'clickhouse://default:@localhost/test'
+    # Subset from a given BUFR file
+    pybufrkit subset 0,3,6,9 BUFR_FILE
 
+    # Query values from the metadata sections (section 0, 1, 2, 3):
+    pybufrkit query %n_subsets BUFR_FILE
 
-When you are using `nginx` as proxy server for ClickHouse server connection string might look like:
+    # Query all values for descriptor 001002 of the data section
+    pybufrkit query 001002 BUFR_FILE
 
-    .. code-block:: python
+    # Query for those root level 001002 of the BUFR Template
+    pybufrkit query /001002 BUFR_FILE
 
-         'clickhouse://user:password@example.com:8124/test?protocol=https'
+    # Query for 001002 that is a direct child of 301001
+    pybufrkit query /301001/001002 BUFR_FILE
 
-Where ``8124`` is proxy port.
+    # Query for all 001002 of the first subset
+    pybufrkit query '@[0] > 001002' BUFR_FILE
 
-If you need control over the underlying HTTP connection, pass a `requests.Session
-<https://requests.readthedocs.io/en/master/user/advanced/#session-objects>`_ instance
-to ``create_engine()``, like so:
+    # Query for associated field of 021062
+    pybufrkit query 021062.A21062 BUFR_FILE
 
-    .. code-block:: python
+    # Filtering through a number of BUFR files with Script support
+    # (find files that have multiple subsets):
+    pybufrkit script 'if ${%n_subsets} > 1: print(PBK_FILENAME)' DIRECTORY/*.bufr
 
-        from sqlalchemy import create_engine
-        from requests import Session
+    # Lookup information for a Element Descriptor (along with its code table)
+    pybufrkit lookup -l 020003
 
-        uri = 'clickhouse://default:@localhost/test'
+    # Compile a BUFR Template composed as a comma separated list of descriptors
+    pybufrkit compile 309052,205060
 
-        engine = create_engine(uri, connect_args={'http_session': Session()})
 
+Library Usage
+-------------
 
-Native
-------
+The following code shows an example of basic library usage
 
-Please note that native connection **is not encrypted**. All data including
-user/password is transferred in plain text. You should use this connection over
-SSH or VPN (for example) while communicating over untrusted network.
+.. code-block:: Python
 
-Connection string to database `test` in default ClickHouse installation:
+    # Decode a BUFR file
+    from pybufrkit.decoder import Decoder
+    decoder = Decoder()
+    with open(SOME_BUFR_FILE, 'rb') as ins:
+        bufr_message = decoder.process(ins.read())
 
-    .. code-block:: python
-
-         'clickhouse+native://default:@localhost/test'
-
-All connection string parameters are proxied to `clickhouse-driver`.
-See it's `parameters <https://clickhouse-driver.readthedocs.io/en/latest/api.html#clickhouse_driver.connection.Connection>`_.
-
-
-Features
-========
-
-SQLAlchemy declarative support
-------------------------------
-
-Both declarative and constructor-style tables support:
-
-    .. code-block:: python
-
-        from sqlalchemy import create_engine, Column, MetaData, literal
-
-        from clickhouse_sqlalchemy import Table, make_session, get_declarative_base, types, engines
-
-        uri = 'clickhouse://default:@localhost/test'
-
-        engine = create_engine(uri)
-        session = make_session(engine)
-        metadata = MetaData(bind=engine)
-
-        Base = get_declarative_base(metadata=metadata)
-
-        class Rate(Base):
-            day = Column(types.Date, primary_key=True)
-            value = Column(types.Int32)
-            other_value = Column(
-                types.DateTime,
-                clickhouse_codec=('DoubleDelta', 'ZSTD'),
-            )
-
-            __table_args__ = (
-                engines.Memory(),
-            )
-
-        another_table = Table('another_rate', metadata,
-            Column('day', types.Date, primary_key=True),
-            Column('value', types.Int32, server_default=literal(1)),
-            engines.Memory()
-        )
-
-Tables created in declarative way have lowercase with words separated by underscores naming convention.
-But you can easy set you own via SQLAlchemy ``__tablename__`` attribute.
-
-Basic DDL support
------------------
-
-You can emit simple DDL. Example ``CREATE/DROP`` table:
-
-    .. code-block:: python
-
-        table = Rate.__table__
-        table.create()
-        another_table.create()
-
-
-        another_table.drop()
-        table.drop()
-
-
-Basic INSERT clause support
----------------------------
-
-Simple batch INSERT:
-
-    .. code-block:: python
-
-        from datetime import date, timedelta
-        from sqlalchemy import func
-
-        today = date.today()
-        rates = [{'day': today - timedelta(i), 'value': 200 - i} for i in range(100)]
-
-        # Emits single INSERT statement.
-        session.execute(table.insert(), rates)
-
-
-Common SQLAlchemy query method chaining
----------------------------------------
-
-``order_by``, ``filter``, ``limit``, ``offset``, etc. are supported:
-
-    .. code-block:: python
-
-        session.query(func.count(Rate.day)) \
-            .filter(Rate.day > today - timedelta(20)) \
-            .scalar()
-
-        session.query(Rate.value) \
-            .order_by(Rate.day.desc()) \
-            .first()
-
-        session.query(Rate.value) \
-            .order_by(Rate.day) \
-            .limit(10) \
-            .all()
-
-        session.query(func.sum(Rate.value)) \
-            .scalar()
-
-
-Advanced INSERT clause support
-------------------------------
-INSERT FROM SELECT statement:
-
-    .. code-block:: python
-
-        from sqlalchemy import cast
-
-        # Labels must be present.
-        select_query = session.query(
-            Rate.day.label('day'),
-            cast(Rate.value * 1.5, types.Int32).label('value')
-        ).subquery()
-
-        # Emits single INSERT FROM SELECT statement
-        session.execute(
-            another_table.insert()
-            .from_select(['day', 'value'], select_query)
-        )
-
-
-Many but not all of SQLAlchemy features are supported out of the box.
-
-UNION ALL example:
-
-    .. code-block:: python
-
-        from sqlalchemy import union_all
-
-        select_rate = session.query(
-            Rate.day.label('date'),
-            Rate.value.label('x')
-        )
-        select_another_rate = session.query(
-            another_table.c.day.label('date'),
-            another_table.c.value.label('x')
-        )
-
-        union_all(select_rate, select_another_rate).execute().fetchone()
-
-
-External data for query processing
-----------------------------------
-
-Currently can be used with native interface.
-
-    .. code-block:: python
-
-        ext = Table(
-            'ext', metadata, Column('x', types.Int32),
-            clickhouse_data=[(101, ), (103, ), (105, )], extend_existing=True
-        )
-
-        rv = session.query(Rate) \
-            .filter(Rate.value.in_(session.query(ext.c.x))) \
-            .execution_options(external_tables=[ext]) \
-            .all()
-
-        print(rv)
-
-Supported ClickHouse-specific SQL
----------------------------------
-
-- ``SELECT`` query:
-    - ``WITH TOTALS``
-    - ``SAMPLE``
-    - lambda functions: ``x -> expr``
-    - ``JOIN``
-
-See `tests <https://github.com/xzkostyan/clickhouse-sqlalchemy/tree/master/tests>`_ for examples.
-
-
-Overriding default query settings
----------------------------------
-
-Set lower priority to query and limit max number threads to execute the request.
-
-    .. code-block:: python
-
-        rv = session.query(func.sum(Rate.value)) \
-            .execution_options(settings={'max_threads': 2, 'priority': 10}) \
-            .scalar()
-
-        print(rv)
-
-
-Running tests
-=============
-
-    .. code-block:: bash
-
-        mkvirtualenv testenv && python setup.py test
-
-``pip`` will automatically install all required modules for testing.
-
-
-License
-=======
-
-ClickHouse SQLAlchemy is distributed under the `MIT license
-<http://www.opensource.org/licenses/mit-license.php>`_.
-
-How to Contribute
-=================
-
-#. Check for open issues or open a fresh issue to start a discussion around a feature idea or a bug.
-#. Fork `the repository <https://github.com/xzkostyan/clickhouse-sqlalchemy>`_ on GitHub to start making your changes to the **master** branch (or branch off of it).
-#. Write a test which shows that the bug was fixed or that the feature works as expected.
-#. Send a pull request and bug the maintainer until it gets merged and published.
+    # Convert the BUFR message to JSON
+    from pybufrkit.renderer import FlatJsonRenderer
+    json_data = FlatJsonRenderer().render(bufr_message)
+
+    # Encode the JSON back to BUFR file
+    from pybufrkit.encoder import Encoder
+    encoder = Encoder()
+    bufr_message_new = encoder.process(json_data)
+    with open(BUFR_OUTPUT_FILE, 'wb') as outs:
+        outs.write(bufr_message_new.serialized_bytes)
+
+    # Decode for multiple messages from a single file
+    from pybufrkit.decoder import generate_bufr_message
+    with open(SOME_FILE, 'rb') as ins:
+        for bufr_message in generate_bufr_message(decoder, ins.read()):
+            pass  # do something with the decoded message object
+
+    # Query the metadata
+    from pybufrkit.mdquery import MetadataExprParser, MetadataQuerent
+    n_subsets = MetadataQuerent(MetadataExprParser()).query(bufr_message, '%n_subsets')
+
+    # Query the data
+    from pybufrkit.dataquery import NodePathParser, DataQuerent
+    query_result = DataQuerent(NodePathParser()).query(bufr_message, '001002')
+
+    # Script
+    from pybufrkit.script import ScriptRunner
+    # NOTE: must use the function version of print (Python 3), NOT the statement version
+    code = """print('Multiple' if ${%n_subsets} > 1 else 'Single')"""
+    runner = ScriptRunner(code)
+    runner.run(bufr_message)
+
+**For more help, please check the documentation site at** http://pybufrkit.readthedocs.io/
