@@ -1,4 +1,1 @@
-wheel
-selenium
-websocket-client
-pytest
+# none
